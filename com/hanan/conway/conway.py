@@ -21,16 +21,17 @@ class IConwayGame(object):
         raise NotImplementedError('THIS IS AN INTERFACE')
     
 class Cell:
-    def __init__(self, x, y):
+    def __init__(self, x, y, alive=True):
         self.x = x
         self.y = y
+        self.alive = alive
     
 class Conway(IConwayGame, IConwayView):
     def __init__(self, live_cells):
         self.gen_num = 0
         self.current_live_cells = dict()
         for c in live_cells:
-            self.current_live_cells[(c.x,c.y)] = True
+            self.current_live_cells[(c.x,c.y)] = c
         log.debug(self.current_live_cells)
             
     @staticmethod
@@ -44,7 +45,7 @@ class Conway(IConwayGame, IConwayView):
     def is_alive(self,x,y):
         alive = False
         try:
-            alive = self.current_live_cells[(x,y)]
+            alive = self.current_live_cells[(x,y)].alive
         except KeyError:
             pass
         return alive
@@ -53,8 +54,8 @@ class Conway(IConwayGame, IConwayView):
         next_gen = dict()
         process_set = set()
         for (x,y) in self.current_live_cells.keys():
-            nbr_set = set([nbr for nbr in Conway.neighbours(x,y, included=True)])
-            process_set = process_set.union(nbr_set)
+            for nbr in Conway.neighbours(x,y, included=True):
+                process_set.add(nbr)
         for (x,y) in process_set:
             num_live_nbrs = 0
             for (nbrx, nbry) in Conway.neighbours(x,y):
@@ -63,7 +64,7 @@ class Conway(IConwayGame, IConwayView):
             processed_cell_alive= self.is_alive(x,y)
             next_gen_alive = Conway.apply_rules(processed_cell_alive, num_live_nbrs)
             if next_gen_alive:
-                next_gen[(x,y)] = next_gen_alive
+                next_gen[(x,y)] = Cell(x,y, next_gen_alive)
         self.current_live_cells = next_gen
         self.gen_num += 1
 
