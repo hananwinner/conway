@@ -2,6 +2,7 @@ import collections
 import logging
 import os
 from tempfile import gettempdir
+import uuid
 
 
 log = logging.getLogger('conway')
@@ -9,16 +10,161 @@ file_handler = logging.FileHandler(os.path.join(gettempdir(), 'conway.log'), mod
 log.addHandler(file_handler)
 log.setLevel(logging.DEBUG)
 
+class Point(object):
+    def __init__(self, x, y):
+        self._x = x
+        self._y = y
+    @property
+    def x(self):
+        return self._x
+    @property
+    def y(self):
+        return self._y
+    
+class TranslationReference(Point):
+    def TranslationReference(self):
+        Point.__init__(self, 0, 0)
+    def __add__(self, point):
+        self._x += point.x
+        self._y += point.y
+        
 
-class IConwayView(object):
-    def is_alive(self, x, y):
-        raise NotImplementedError('THIS IS AN INTERFACE')
+class Cell(object):
+    def __init__(self, alive=True):
+        self._alive = alive
+    @property
+    def alive(self):
+        return self._alive
+    
+class LiveCells(object):
+    def __init__(self, points):
+        self.locations_dict = dict()
+        for point in points:
+            self.locations_dict[point] = Cell(True)
+    def live_cell_coordinates(self):
+        for point, cell in self.locations_dict.iteritems():
+            if cell.alive:
+                yield point
+
+class IViewableUniverse(object):
     def get_gen_num(self):
         raise NotImplementedError('THIS IS AN INTERFACE')
+    def get_biomass_coordinates(self):
+        pass
+
+class BiomassOverflow(Exception):
+    pass
     
-class IConwayGame(object):
-    def play(self):
+class IUniverse(object):
+    def __init__(self, universe_id, live_cells):
+        self.universe_id = universe_id
+        self.gen_num = 0
+        self._live_cells = live_cells
+    
+    def _do_next_generation(self):
         raise NotImplementedError('THIS IS AN INTERFACE')
+        
+    def next_generation(self):
+        self._do_next_generation()
+        self.gen_num += 1
+    
+class Universe(IUniverse, IViewableUniverse):
+    def __init__(self, live_cells):
+        IUniverse.__init__(self, live_cells)
+    def get_gen_num(self):
+        return self.gen_num
+    def get_biomass_coordinates(self):
+        return list(self._live_cells.live_cell_coordinates())
+    @staticmethod
+    def neighbours(point, included=False):
+        for j in range(point.y-1,point.y+2):
+            for i in range(point.x-1,point.x+2):
+                if not included and i == point.x and j == point.y:
+                    continue
+                yield (i,j)
+                    
+    def is_alive(self,point):
+        alive = False
+        try:
+            alive = self._live_cells[point].alive
+        except KeyError:
+            pass
+        return alive
+    
+    def _do_next_generation(self):
+        next_gen_points = list()
+        process_set = set()
+        for point in self._live_cells.live_cell_coordinates():
+            for nbr in Conway.neighbours(point, included=True):
+                process_set.add(nbr)
+        for point in process_set:
+            num_live_nbrs = 0
+            for nbr_point in Conway.neighbours(point, included=False):
+                if self.is_alive(point):
+                    num_live_nbrs += 1
+            processed_cell_alive= self.is_alive(point)
+            next_gen_alive = Conway.apply_rules(processed_cell_alive, num_live_nbrs)
+            if next_gen_alive:
+                next_gen_points.append(point)
+        self._live_cells = LiveCells(next_gen_points)
+
+            
+class Translator(object):
+    def __init__(self):
+        self.current_translation = TranslationReference()
+    def extend_translation(self, point):
+        self.current_translation += point
+        
+# class UniverseView(object):
+
+class ManangerView(object):
+    def load(self, universe_id):
+        raise NotImplementedError('THIS IS AN INTERFACE')
+    def create_new_universe(self, live_cells, universe_name=None):
+        raise NotImplementedError('THIS IS AN INTERFACE')
+
+class UniverseMetadata(object):
+    def __init__(self, universe_name=''):
+        self.universe_name = universe_name
+
+class Manager(object):
+    def __init__(self, manager_view):
+        self.manager_view = manager_view
+        self.multiverse = dict()
+    @staticmethod
+    def make_random_universe_id():
+        return uuid.uuid4()
+    def on_create_new_universe(self, live_cells, universe_name=None):
+        if universe_name is None:
+            universe_name = ''
+        universe_metadata = UniverseMetadata(universe_name)
+        universe_id = self.make_random_universe_id()
+        self.multiverse[universe_id] = Universe(live_cells) 
+        
+        
+    
+
+        
+
+class IGameListener(object):
+    def on_play(self):    
+    
+class IGameControls(object):
+    def __init__(self):
+        self.listeners = list()
+    def register(self, listener):
+        self.listeners.append(listener)
+    def unregister(self, listener):
+        self.listeners.remove(listener)
+    def play(self, univereId):
+        raise NotImplementedError('THIS IS AN INTERFACE')
+    def load(self):
+        raise NotImplementedError('THIS IS AN INTERFACE')
+    def new_universe(self, live_cells, universe_dimensions=None):
+        raise NotImplementedError('THIS IS AN INTERFACE')
+    def quit(self):
+        raise NotImplementedError('THIS IS AN INTERFACE')
+
     
 class Cell:
     def __init__(self, x, y, alive=True):
@@ -137,11 +283,11 @@ class ConsoleUi(ConwayUi):
         print('\n')
         
 class ConwayController(object):
-    def __init__(self, conway_game, conway_ui):
-        self.conway_ui = conway_ui
-        self.conway_ui.set_game(conway_game)
+    def __init__(self, conway_manager):
+        pass
     def start(self):
         self.conway_ui.show()
+    
                     
 if __name__ == "__main__":
     
