@@ -151,9 +151,6 @@ if __name__ == "__main__":
 #       *
 #     ***
 #     '''
-    
-    
-    
      
     live_cells = list()
     live_cells.append(Cell(0,0))
@@ -165,10 +162,4 @@ if __name__ == "__main__":
     conway_game = Conway(live_cells)
     ctrlr = ConwayController(conway_game, conway_ui)
     ctrlr.start()
-    
-        
-    
-    
-        
-    
         
