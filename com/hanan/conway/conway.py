@@ -46,10 +46,10 @@ class LiveCells(object):
 
 
 class Universe(object):
-    def __init__(self, universe_id, universe_metadata, live_cell_points, gen_num=0):
+    def __init__(self, universe_id, universe_metadata, live_cells, gen_num=0):
         self.universe_id = universe_id
         self.universe_metadata = universe_metadata
-        self._live_cells = live_cell_points
+        self._live_cells = live_cells
         self.gen_num = gen_num
     def get_gen_num(self):
         return self.gen_num
@@ -59,14 +59,14 @@ class Universe(object):
         self._do_next_generation()
         self.gen_num += 1
     @staticmethod
-    def neighbours(point, included=False):
+    def _neighbours(point, included=False):
         for j in range(point.y-1,point.y+2):
             for i in range(point.x-1,point.x+2):
                 if not included and i == point.x and j == point.y:
                     continue
                 yield Point(i,j)
                     
-    def is_alive(self,point):
+    def _is_alive(self,point):
         try:
             return self._live_cells[point].alive
         except KeyError:
@@ -76,20 +76,20 @@ class Universe(object):
         next_gen_points = list()
         process_set = set()
         for point in self._live_cells.live_cell_coordinates():
-            for nbr in Universe.neighbours(point, included=True):
+            for nbr in Universe._neighbours(point, included=True):
                 process_set.add(nbr)
         for point in process_set:
             num_live_nbrs = 0
-            for nbr_point in Universe.neighbours(point, included=False):
-                if self.is_alive(nbr_point):
+            for nbr_point in Universe._neighbours(point, included=False):
+                if self._is_alive(nbr_point):
                     num_live_nbrs += 1
-            processed_cell_alive= self.is_alive(point)
-            next_gen_alive = Universe.apply_rules(processed_cell_alive, num_live_nbrs)
+            processed_cell_alive= self._is_alive(point)
+            next_gen_alive = Universe._apply_rules(processed_cell_alive, num_live_nbrs)
             if next_gen_alive:
                 next_gen_points.append(point)
         self._live_cells = LiveCells(next_gen_points)
     @staticmethod
-    def apply_rules(alive, num_live_nbrs):
+    def _apply_rules(alive, num_live_nbrs):
         if alive:
             if num_live_nbrs < 2:
                 return False

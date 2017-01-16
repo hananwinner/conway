@@ -3,5 +3,5 @@ from com.hanan.conway.conway import Conway
 
 class TestNeighbours(unittest.TestCase):
     def test_neighbours(self):
-        Conway.neighbours(1, -1, False)
+        Conway._neighbours(1, -1, False)
         
