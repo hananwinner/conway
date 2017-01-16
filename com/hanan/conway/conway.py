@@ -3,6 +3,9 @@ import logging
 import os
 from tempfile import gettempdir
 import uuid
+import json
+from os import listdir
+from os.path import isfile, join
 
 
 log = logging.getLogger('conway')
@@ -20,6 +23,7 @@ class Point(object):
     @property
     def y(self):
         return self._y
+
     
 class TranslationReference(Point):
     def TranslationReference(self):
@@ -27,6 +31,8 @@ class TranslationReference(Point):
     def __add__(self, point):
         self._x += point.x
         self._y += point.y
+    def translate(self, point):
+        return Point(self.x + point.x, self.y + point.y)
         
 
 class Cell(object):
@@ -56,10 +62,11 @@ class BiomassOverflow(Exception):
     pass
     
 class IUniverse(object):
-    def __init__(self, universe_id, live_cells):
+    def __init__(self, universe_id, universe_metadata, live_cells, gen_num=0):
         self.universe_id = universe_id
-        self.gen_num = 0
+        self.universe_metadata = universe_metadata
         self._live_cells = live_cells
+        self.gen_num = gen_num
     
     def _do_next_generation(self):
         raise NotImplementedError('THIS IS AN INTERFACE')
@@ -69,12 +76,18 @@ class IUniverse(object):
         self.gen_num += 1
     
 class Universe(IUniverse, IViewableUniverse):
-    def __init__(self, live_cells):
-        IUniverse.__init__(self, live_cells)
+    def __init__(self, universe_id, universe_metadata, live_cells, gen_num=0):
+        IUniverse.__init__(self, universe_id, universe_metadata, live_cells, gen_num)
+    @staticmethod
     def get_gen_num(self):
         return self.gen_num
     def get_biomass_coordinates(self):
         return list(self._live_cells.live_cell_coordinates())
+    def translate(self, translation_reference):
+        translated_cells_point = list()
+        for point in self._live_cells.keys():
+            translated_cells_point.append(translation_reference.translate(point))
+        self._live_cells = LiveCells(translated_cells_point)
     @staticmethod
     def neighbours(point, included=False):
         for j in range(point.y-1,point.y+2):
@@ -108,19 +121,26 @@ class Universe(IUniverse, IViewableUniverse):
                 next_gen_points.append(point)
         self._live_cells = LiveCells(next_gen_points)
 
+class Translatable(object):
+    def translate(self, translation_reference):
+        raise NotImplementedError('THIS IS AN INTERFACE')
             
 class Translator(object):
     def __init__(self):
         self.current_translation = TranslationReference()
     def extend_translation(self, point):
         self.current_translation += point
+    def translate(self, translatable):
+        translatable.translate(self.current_translation)
         
 # class UniverseView(object):
 
-class ManangerView(object):
+class ManangerControls(object):
     def load(self, universe_id):
         raise NotImplementedError('THIS IS AN INTERFACE')
     def create_new_universe(self, live_cells, universe_name=None):
+        raise NotImplementedError('THIS IS AN INTERFACE')
+    def quit(self):
         raise NotImplementedError('THIS IS AN INTERFACE')
 
 class UniverseMetadata(object):
@@ -128,18 +148,54 @@ class UniverseMetadata(object):
         self.universe_name = universe_name
 
 class Manager(object):
-    def __init__(self, manager_view):
-        self.manager_view = manager_view
+    def __init__(self, manager_controls):
+        self.manager_view = manager_controls
         self.multiverse = dict()
+        self.persistence = self.FilePersistence()
     @staticmethod
-    def make_random_universe_id():
+    def _make_random_universe_id():
         return uuid.uuid4()
     def on_create_new_universe(self, live_cells, universe_name=None):
         if universe_name is None:
             universe_name = ''
         universe_metadata = UniverseMetadata(universe_name)
-        universe_id = self.make_random_universe_id()
-        self.multiverse[universe_id] = Universe(live_cells) 
+        universe_id = self._make_random_universe_id()
+        self.multiverse[universe_id] = Universe(universe_id, universe_metadata, live_cells)
+    def on_load(self, universe_id):
+        self.multiverse[universe_id] = self.persistence.load(universe_id)
+        return self.multiverse[universe_id]
+    def on_quit(self):
+        for universe_id, universe in self.multiverse.iteritems():
+            self.persistence.persist(universe_id, universe)
+    class IPersistence(object):
+        def persist(self, universe_id, universe):
+            pass
+        def get_persisted_multiverse(self):
+            pass
+        def load(self, universe_id): 
+            pass
+    class FilePersistence(IPersistence):
+        def __init__(self):
+            self.folder = os.path.join( gettempdir(), 'conway_universe_files')
+        def persist(self, universe_id, universe):
+            universe_data = dict()
+            universe_data['gen_num'] = universe.get_gen_num()
+            universe_data['live_cells'] = universe.get_biomass_coordinates()
+            j = json.dumps(universe_data)
+            with open(os.path.join(self.folder, universe_id), mode='w') as wfd:
+                wfd.write(j)
+        def get_persisted_multiverse(self):
+            return [f for f in listdir(self.folder) if isfile(join(self.folder, f))]
+        def load(self, universe_id): 
+            j =''
+            with open(os.path.join(self.folder, universe_id), mode='r') as rfd:
+                j = rfd.read()
+            universe_data = json.loads(j)
+            gen_num = universe_data['gen_num']
+            biomass_coordinates = universe_data['live_cells']
+            return Universe.load(gen_num, biomass_coordinates)  
+            
+        
         
         
     
